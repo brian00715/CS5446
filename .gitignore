@@ -1,0 +1,11 @@
+.vscode/
+
+**devel/
+**logs/
+**build/
+
+**__pycache__/
+**.catkin_tools/
+
+**backup**
+**.pyc

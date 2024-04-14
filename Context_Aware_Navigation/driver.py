@@ -131,12 +131,12 @@ def main():
 
     # initialize training replay buffer
     experience_buffer = []
-    for i in range(15):
+    for i in range(15): # max 15 agents
         experience_buffer.append([])
     
     # collect data from worker and do training
     try:
-        while True:
+        while True: # TODO: only terminate manually?
             # wait for any job to be completed
             done_id, job_list = ray.wait(job_list)
             # get the results
@@ -166,7 +166,7 @@ def main():
                 indices = range(len(experience_buffer[0]))
 
                 # training for n times each step
-                for j in range(8):
+                for j in range(8): # TODO: WHY 8? gradient accumulation?
                     # randomly sample a batch data
                     sample_indices = random.sample(indices, BATCH_SIZE)
                     rollouts = []
@@ -190,6 +190,7 @@ def main():
                     next_edge_padding_mask_batch = torch.stack(rollouts[13]).to(device)
                     next_edge_mask_batch = torch.stack(rollouts[14]).to(device)
 
+                    # TODO: what does the following lines mean??
                     # SAC
                     with torch.no_grad():
                         q_values1, _ = dp_q_net1(node_inputs_batch, edge_inputs_batch, current_inputs_batch, node_padding_mask_batch, edge_padding_mask_batch, edge_mask_batch)

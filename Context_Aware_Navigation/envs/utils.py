@@ -20,7 +20,13 @@ class NavStatus(enumerate):
     ARRIVED = 3
 
 def yaw2quat_ros(yaw: float) -> geometry_msgs.Quaternion:
-    return geometry_msgs.Quaternion(*tft.quaternion_from_euler(0, 0, yaw))
+    quat = tft.quaternion_from_euler(0, 0, yaw)
+    quat_ros = geometry_msgs.Quaternion()
+    quat_ros.x = quat[0]
+    quat_ros.y = quat[1]
+    quat_ros.z = quat[2]
+    quat_ros.w = quat[3]
+    return quat_ros
 
 def euclidian_dist_se2(p1: geometry_msgs.Pose, p2: geometry_msgs.Pose) -> float:
     return ((p1.position.x - p2.position.x) ** 2 + (p1.position.y - p2.position.y) ** 2) ** 0.5

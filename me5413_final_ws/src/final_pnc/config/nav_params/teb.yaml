@@ -1,12 +1,12 @@
 TebLocalPlannerROS:
-  # odom_topic: /gazebo/odom
+  odom_topic: /gazebo/ground_truth/state
   # odom_topic: /odometry/filtered
-  odom_topic: /jackal/gt_odom
+  # odom_topic: /jackal/gt_odom
   map_frame: map
 
   # Trajectory
   teb_autosize: True
-  dt_ref: 0.3 #0.2
+  dt_ref: 0.2 #0.2
   dt_hysteresis: 0.1
   global_plan_overwrite_orientation: True
   max_global_plan_lookahead_dist: 3.0
@@ -16,8 +16,8 @@ TebLocalPlannerROS:
   max_vel_x: 1.5 # 1.5
   max_vel_x_backwards: 0.4 #0.2
   max_vel_theta: 2 # 4
-  acc_lim_x: 10 # 0.2
-  acc_lim_theta: 25 #0.5, 0.26
+  acc_lim_x: 15 # 20
+  acc_lim_theta: 20 # 25
   min_turning_radius: 0.0
   footprint_model: # types: "point", "circular", "two_circles", "line", "polygon"
     type: "polygon"
@@ -31,8 +31,8 @@ TebLocalPlannerROS:
     vertices: [[-0.21, -0.165], [-0.21, 0.165], [0.21, 0.165], [0.21, -0.165]] # for type "polygon"
 
   # GoalTolerance
-  xy_goal_tolerance: 0.2 #0.2
-  yaw_goal_tolerance: 0.174520 # 3.14
+  xy_goal_tolerance: 0.1 #0.2
+  yaw_goal_tolerance: 0.17 # (rad)
   free_goal_vel: False
 
   # Obstacles

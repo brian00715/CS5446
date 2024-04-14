@@ -10,7 +10,7 @@ from utils import pose2ndarray_se2, yaw2quat_ros
 import cv2
 
 
-class GazeboAgent:
+class Gazebo:
     def __init__(self):
 
         # status variables
@@ -39,7 +39,7 @@ class GazeboAgent:
 
 if __name__ == "__main__":
     rospy.init_node("gazebo_agent")
-    agent = GazeboAgent()
+    agent = GazeboEnv()
     rate = rospy.Rate(30)
     while not rospy.is_shutdown():
         if agent.img_curr is None:
