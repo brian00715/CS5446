@@ -24,6 +24,7 @@ class Graph_generator:
         self.indicator = None
         self.direction_vector = None
         self.target_position = target_position
+        self.theta = None
     
     def generate_node_coords(self, robot_location, robot_belief):
         free_area = self.free_area(robot_belief)
