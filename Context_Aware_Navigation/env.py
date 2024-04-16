@@ -10,7 +10,7 @@ from node import *
 import time
 
 class Env():
-    def __init__(self, map_index, k_size=20, plot=False, test=False):
+    def __init__(self, map_index, k_size=4, plot=False, test=False):
         self.test = test
         if self.test:
             self.map_dir = f'Context_Aware_Navigation/DungeonMaps/pp/test'
@@ -172,4 +172,5 @@ class Env():
 
 if __name__ == '__main__':
     env = Env(0, plot=True)
+    print("env start_position: ", env.start_position)
     env.step(env.start_position, env.start_position + np.array([0, 1]), 0)

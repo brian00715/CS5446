@@ -17,6 +17,7 @@ class Graph_generator:
         self.map_x = map_size[1]
         self.map_y = map_size[0]
         self.uniform_points = self.generate_uniform_points()
+        self.all_points = self.get_all_points()
         self.sensor_range = sensor_range
         self.route_node = []
         self.nodes_list = []
@@ -32,6 +33,15 @@ class Graph_generator:
         uniform_points_to_check = self.uniform_points[:, 0] + self.uniform_points[:, 1] * 1j
         _, _, candidate_indices = np.intersect1d(free_area_to_check, uniform_points_to_check, return_indices=True)
         node_coords = self.uniform_points[candidate_indices]
+        node_coords = np.concatenate((robot_location.reshape(1, 2), self.target_position.reshape(1, 2), node_coords))
+        return self.unique_coords(node_coords).reshape(-1, 2)
+    
+    def generate_all_node_coords(self, robot_location, robot_belief):
+        free_area = self.free_area(robot_belief)
+        free_area_to_check = free_area[:, 0] + free_area[:, 1] * 1j
+        all_points_to_check = self.all_points[:, 0] + self.all_points[:, 1] * 1j
+        _, _, candidate_indices = np.intersect1d(free_area_to_check, all_points_to_check, return_indices=True)
+        node_coords = self.all_points[candidate_indices]
         node_coords = np.concatenate((robot_location.reshape(1, 2), self.target_position.reshape(1, 2), node_coords))
         return self.unique_coords(node_coords).reshape(-1, 2)
     
@@ -76,7 +86,7 @@ class Graph_generator:
         else:
             # Generate nodes coordinates in the sector area around the robot
             sampled_points = self.sector_sampling(robot_location, 20, self.sensor_range, self.sensor_range // 20, 5)
-        sampled_points_to_check = sampled_points[0] + sampled_points[1] * 1j
+        sampled_points_to_check = sampled_points[:, 0] + sampled_points[:, 1] * 1j
         _, _, candidate_indices = np.intersect1d(free_area_to_check, sampled_points_to_check, return_indices=True)
         node_coords = sampled_points[candidate_indices]
         node_coords = np.concatenate((robot_location.reshape(1, 2), self.target_position.reshape(1, 2), node_coords))
@@ -93,8 +103,9 @@ class Graph_generator:
         self.graph.clear_edge(node_index)
 
     def generate_graph(self, robot_location, ground_truth_belief, robot_belief, frontiers):        
-        self.node_coords = self.generate_node_coords(robot_location, robot_belief)
-        self.ground_truth_node_coords = self.generate_node_coords(robot_location, ground_truth_belief)
+        # self.node_coords = self.generate_node_coords(robot_location, robot_belief)
+        self.ground_truth_node_coords = self.generate_all_node_coords(robot_location, ground_truth_belief)
+        self.node_coords = self.dynamic_generate_node_coords(robot_location, robot_belief)
         self.find_k_neighbor_all_nodes(self.node_coords, robot_belief)
         self.find_k_neighbor_all_nodes(self.ground_truth_node_coords, ground_truth_belief, ground_truth=True)
         
@@ -121,9 +132,13 @@ class Graph_generator:
         # add uniform points in the new free area to the node coords
         new_free_area = self.free_area((robot_belief - old_robot_belief > 0) * 255)
         free_area_to_check = new_free_area[:, 0] + new_free_area[:, 1] * 1j
-        uniform_points_to_check = self.uniform_points[:, 0] + self.uniform_points[:, 1] * 1j
-        _, _, candidate_indices = np.intersect1d(free_area_to_check, uniform_points_to_check, return_indices=True)
-        new_node_coords = self.uniform_points[candidate_indices]
+        # uniform_points_to_check = self.uniform_points[:, 0] + self.uniform_points[:, 1] * 1j
+        # _, _, candidate_indices = np.intersect1d(free_area_to_check, uniform_points_to_check, return_indices=True)
+        # new_node_coords = self.uniform_points[candidate_indices]
+        sampled_points = self.polar_sampling(robot_position, 20, self.sensor_range, self.sensor_range // 20, 12)
+        sampled_points_to_check = sampled_points[:, 0] + sampled_points[:, 1] * 1j
+        _, _, candidate_indices = np.intersect1d(free_area_to_check, sampled_points_to_check, return_indices=True)
+        new_node_coords = sampled_points[candidate_indices]
         old_node_coords = copy.deepcopy(self.node_coords)
         self.node_coords = np.concatenate((self.node_coords, new_node_coords, self.target_position.reshape(1, 2)))
         self.node_coords = self.unique_coords(self.node_coords).reshape(-1, 2)
@@ -169,6 +184,13 @@ class Graph_generator:
     def generate_uniform_points(self):
         x = np.linspace(0, self.map_x - 1, 30).round().astype(int)
         y = np.linspace(0, self.map_y - 1, 30).round().astype(int)
+        t1, t2 = np.meshgrid(x, y)
+        points = np.vstack([t1.T.ravel(), t2.T.ravel()]).T
+        return points
+    
+    def get_all_points(self):
+        x = np.linspace(0, self.map_x - 1, self.map_x).round().astype(int)
+        y = np.linspace(0, self.map_y - 1, self.map_y).round().astype(int)
         t1, t2 = np.meshgrid(x, y)
         points = np.vstack([t1.T.ravel(), t2.T.ravel()]).T
         return points
@@ -229,15 +251,17 @@ class Graph_generator:
                 start = p
                 end = neighbour
                 if not self.check_collision(start, end, robot_belief):
-                    a = str(self.find_index_from_coords(node_coords, p))
+                    # a = str(self.find_index_from_coords(node_coords, p))
                     b = str(self.find_index_from_coords(node_coords, neighbour))
                     if not ground_truth:
+                        a = str(self.find_index_from_coords(node_coords, p))
                         self.graph.add_node(a)
                         self.graph.add_edge(a, b, distances[i, j])
                         if self.plot:
                             self.x.append([p[0], neighbour[0]])
                             self.y.append([p[1], neighbour[1]])
                     else:
+                        a = str(i)
                         self.ground_truth_graph.add_node(a)
                         self.ground_truth_graph.add_edge(a, b, distances[i, j])
 
