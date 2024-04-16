@@ -24,7 +24,7 @@ class Graph_generator:
         self.indicator = None
         self.direction_vector = None
         self.target_position = target_position
-        self.theta = None
+
     
     def generate_node_coords(self, robot_location, robot_belief):
         free_area = self.free_area(robot_belief)
@@ -45,27 +45,42 @@ class Graph_generator:
             ys = np.round(y_center + radius * np.sin(angles)).astype(int)
             all_xs.extend(xs)
             all_ys.extend(ys)
-        return np.vstack([all_xs, all_ys])
+        return np.vstack([all_xs, all_ys]).T
+    
+    def sector_sampling(self, robot_location, min_radius, max_radius, num_arcs, num_points_per_arc):
+        all_xs, all_ys = [], []
+        direction_vector = self.route_node[-2] - robot_location
+        x_center, y_center = robot_location[0], robot_location[1]
+        # Calculate the angles for the sector
+        angle_center = np.arctan2(direction_vector[1], direction_vector[0])
+        min_angle = angle_center - np.pi / 4
+        max_angle = angle_center + np.pi / 4
+        
+        # Generate points for each arc
+        radii = np.linspace(min_radius, max_radius, num_arcs)
+        for radius in radii:
+            angles = np.linspace(min_angle, max_angle, num_points_per_arc, endpoint=False)
+            xs = np.round(x_center + radius * np.cos(angles)).astype(int)
+            ys = np.round(y_center + radius * np.sin(angles)).astype(int)
+            all_xs.extend(xs)
+            all_ys.extend(ys)
+        return np.vstack([all_xs, all_ys]).T
     
     
     def dynamic_generate_node_coords(self, robot_location, robot_belief):
+        free_area = self.free_area(robot_belief)
+        free_area_to_check = free_area[:, 0] + free_area[:, 1] * 1j
         if len(self.route_node) == 1:
             # At the beginning, generate nodes coordinates in the circular area around the robot
-            free_area = self.free_area(robot_belief)
-            free_area_to_check = free_area[:, 0] + free_area[:, 1] * 1j
             sampled_points = self.polar_sampling(robot_location, 20, self.sensor_range, self.sensor_range // 20, 12)
-            sampled_points_to_check = sampled_points[0] + sampled_points[1] * 1j
-            _, _, candidate_indices = np.intersect1d(free_area_to_check, sampled_points_to_check, return_indices=True)
-            node_coords = sampled_points[candidate_indices]
-            node_coords = np.concatenate((robot_location.reshape(1, 2), self.target_position.reshape(1, 2), node_coords))
-            return self.unique_coords(node_coords).reshape(-1, 2)
         else:
-            # Generate the new nodes coordinates in a fanshape area spreading from the robot with current direction with angle 90 degree
-            robot_direction = robot_location - self.route_node[-2]
-            
-            
-            
-            
+            # Generate nodes coordinates in the sector area around the robot
+            sampled_points = self.sector_sampling(robot_location, 20, self.sensor_range, self.sensor_range // 20, 5)
+        sampled_points_to_check = sampled_points[0] + sampled_points[1] * 1j
+        _, _, candidate_indices = np.intersect1d(free_area_to_check, sampled_points_to_check, return_indices=True)
+        node_coords = sampled_points[candidate_indices]
+        node_coords = np.concatenate((robot_location.reshape(1, 2), self.target_position.reshape(1, 2), node_coords))
+        return self.unique_coords(node_coords).reshape(-1, 2)
             
 
     def edge_clear_all_nodes(self):
