@@ -219,7 +219,7 @@ class PolicyNet(nn.Module):
 
         current_mask[:,:,0] = 1 # don't stay at current position
         enhanced_current_node_feature, _ = self.decoder(current_node_feature, enhanced_node_feature, node_padding_mask)
-        enhanced_current_node_feature = self.current_embedding(torch.cat((enhanced_current_node_feature, current_node_feature), dim=-1))
+        enhanced_current_node_feature = self.current_embedding(torch.cat((enhanced_current_node_feature, current_node_feature), dim=-1)) # TODO: why this step?
         logp = self.pointer(enhanced_current_node_feature, neigboring_feature, current_mask)
         logp= logp.squeeze(1)
         return logp

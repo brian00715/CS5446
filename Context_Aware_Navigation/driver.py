@@ -20,38 +20,55 @@ if not os.path.exists(model_path):
 if not os.path.exists(gifs_path):
     os.makedirs(gifs_path)
 
+
 def writeToTensorBoard(writer, tensorboardData, curr_episode):
 
     tensorboardData = np.array(tensorboardData)
     tensorboardData = list(np.nanmean(tensorboardData, axis=0))
-    reward, value, policyLoss, qValueLoss, entropy, policyGradNorm, qValueGradNorm, log_alpha, alphaLoss, travel_dist, success_rate, explored_rate = tensorboardData
+    (
+        reward,
+        value,
+        policyLoss,
+        qValueLoss,
+        entropy,
+        policyGradNorm,
+        qValueGradNorm,
+        log_alpha,
+        alphaLoss,
+        travel_dist,
+        success_rate,
+        explored_rate,
+    ) = tensorboardData
 
-    writer.add_scalar(tag='Losses/Value', scalar_value=value, global_step=curr_episode)
-    writer.add_scalar(tag='Losses/Policy Loss', scalar_value=policyLoss, global_step=curr_episode)
-    writer.add_scalar(tag='Losses/Alpha Loss', scalar_value=alphaLoss, global_step=curr_episode)
-    writer.add_scalar(tag='Losses/Q Value Loss', scalar_value=qValueLoss, global_step=curr_episode)
-    writer.add_scalar(tag='Losses/Entropy', scalar_value=entropy, global_step=curr_episode)
-    writer.add_scalar(tag='Losses/Policy Grad Norm', scalar_value=policyGradNorm, global_step=curr_episode)
-    writer.add_scalar(tag='Losses/Q Value Grad Norm', scalar_value=qValueGradNorm, global_step=curr_episode)
-    writer.add_scalar(tag='Losses/Log Alpha', scalar_value=log_alpha, global_step=curr_episode)
-    writer.add_scalar(tag='Perf/Reward', scalar_value=reward, global_step=curr_episode)
-    writer.add_scalar(tag='Perf/Travel Distance', scalar_value=travel_dist, global_step=curr_episode)
-    writer.add_scalar(tag='Perf/Explored Rate', scalar_value=explored_rate, global_step=curr_episode)
-    writer.add_scalar(tag='Perf/Success Rate', scalar_value=success_rate, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Value", scalar_value=value, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Policy Loss", scalar_value=policyLoss, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Alpha Loss", scalar_value=alphaLoss, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Q Value Loss", scalar_value=qValueLoss, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Entropy", scalar_value=entropy, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Policy Grad Norm", scalar_value=policyGradNorm, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Q Value Grad Norm", scalar_value=qValueGradNorm, global_step=curr_episode)
+    writer.add_scalar(tag="Losses/Log Alpha", scalar_value=log_alpha, global_step=curr_episode)
+    writer.add_scalar(tag="Perf/Reward", scalar_value=reward, global_step=curr_episode)
+    writer.add_scalar(tag="Perf/Travel Distance", scalar_value=travel_dist, global_step=curr_episode)
+    writer.add_scalar(tag="Perf/Explored Rate", scalar_value=explored_rate, global_step=curr_episode)
+    writer.add_scalar(tag="Perf/Success Rate", scalar_value=success_rate, global_step=curr_episode)
+
 
 def main():
-    device = torch.device('cuda') if USE_GPU_GLOBAL else torch.device('cpu')
-    local_device = torch.device('cuda') if USE_GPU else torch.device('cpu')
-    
+    device = torch.device("cuda") if USE_GPU_GLOBAL else torch.device("cpu")
+    local_device = torch.device("cuda") if USE_GPU else torch.device("cpu")
+
     global_policy_net = PolicyNet(INPUT_DIM, EMBEDDING_DIM).to(device)
     global_q_net1 = QNet(INPUT_DIM, EMBEDDING_DIM).to(device)
     global_q_net2 = QNet(INPUT_DIM, EMBEDDING_DIM).to(device)
-    log_alpha = torch.FloatTensor([-2]).to(device)  # not trainable when loaded from checkpoint, manually tune it for now
+    log_alpha = torch.FloatTensor([-2]).to(
+        device
+    )  # not trainable when loaded from checkpoint, manually tune it for now
     log_alpha.requires_grad = True
 
     global_target_q_net1 = QNet(INPUT_DIM, EMBEDDING_DIM).to(device)
     global_target_q_net2 = QNet(INPUT_DIM, EMBEDDING_DIM).to(device)
-    
+
     # initialize optimizers
     global_policy_optimizer = optim.Adam(global_policy_net.parameters(), lr=LR)
     global_q_net1_optimizer = optim.Adam(global_q_net1.parameters(), lr=2e-5)
@@ -59,34 +76,34 @@ def main():
     log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-4)
     # initialize decay (not use)
     policy_lr_decay = optim.lr_scheduler.StepLR(global_policy_optimizer, step_size=DECAY_STEP, gamma=0.96)
-    q_net1_lr_decay = optim.lr_scheduler.StepLR(global_q_net1_optimizer,step_size=DECAY_STEP, gamma=0.96)
-    q_net2_lr_decay = optim.lr_scheduler.StepLR(global_q_net2_optimizer,step_size=DECAY_STEP, gamma=0.96)
+    q_net1_lr_decay = optim.lr_scheduler.StepLR(global_q_net1_optimizer, step_size=DECAY_STEP, gamma=0.96)
+    q_net2_lr_decay = optim.lr_scheduler.StepLR(global_q_net2_optimizer, step_size=DECAY_STEP, gamma=0.96)
     log_alpha_lr_decay = optim.lr_scheduler.StepLR(log_alpha_optimizer, step_size=DECAY_STEP, gamma=0.96)
-    
+
     entropy_target = 0.01 * (-np.log(1 / K_SIZE))
     curr_episode = 0
     target_q_update_counter = 1
 
     if LOAD_MODEL:
-        print('Loading Model...')
-        checkpoint = torch.load(model_path + '/checkpoint.pth')
-        global_policy_net.load_state_dict(checkpoint['policy_model'])
-        global_q_net1.load_state_dict(checkpoint['q_net1_model'])
-        global_q_net2.load_state_dict(checkpoint['q_net2_model'])
+        print("Loading Model...")
+        checkpoint = torch.load(model_path + "/checkpoint.pth")
+        global_policy_net.load_state_dict(checkpoint["policy_model"])
+        global_q_net1.load_state_dict(checkpoint["q_net1_model"])
+        global_q_net2.load_state_dict(checkpoint["q_net2_model"])
         # log_alpha = checkpoint['log_alpha']  # not trainable when loaded from checkpoint, manually tune it for now
-        global_policy_optimizer.load_state_dict(checkpoint['policy_optimizer'])
-        global_q_net1_optimizer.load_state_dict(checkpoint['q_net1_optimizer'])
-        global_q_net2_optimizer.load_state_dict(checkpoint['q_net2_optimizer'])
-        log_alpha_optimizer.load_state_dict(checkpoint['log_alpha_optimizer'])
-        policy_lr_decay.load_state_dict(checkpoint['policy_lr_decay'])
-        q_net1_lr_decay.load_state_dict(checkpoint['q_net1_lr_decay'])
-        q_net2_lr_decay.load_state_dict(checkpoint['q_net2_lr_decay'])
-        log_alpha_lr_decay.load_state_dict(checkpoint['log_alpha_lr_decay'])
-        curr_episode = checkpoint['episode']
+        global_policy_optimizer.load_state_dict(checkpoint["policy_optimizer"])
+        global_q_net1_optimizer.load_state_dict(checkpoint["q_net1_optimizer"])
+        global_q_net2_optimizer.load_state_dict(checkpoint["q_net2_optimizer"])
+        log_alpha_optimizer.load_state_dict(checkpoint["log_alpha_optimizer"])
+        policy_lr_decay.load_state_dict(checkpoint["policy_lr_decay"])
+        q_net1_lr_decay.load_state_dict(checkpoint["q_net1_lr_decay"])
+        q_net2_lr_decay.load_state_dict(checkpoint["q_net2_lr_decay"])
+        log_alpha_lr_decay.load_state_dict(checkpoint["log_alpha_lr_decay"])
+        curr_episode = checkpoint["episode"]
 
         print("curr_episode set to ", curr_episode)
         print(log_alpha)
-        print(global_policy_optimizer.state_dict()['param_groups'][0]['lr'])
+        print(global_policy_optimizer.state_dict()["param_groups"][0]["lr"])
 
     global_target_q_net1.load_state_dict(global_q_net1.state_dict())
     global_target_q_net2.load_state_dict(global_q_net2.state_dict())
@@ -121,9 +138,9 @@ def main():
     for i, meta_agent in enumerate(meta_agents):
         curr_episode += 1
         job_list.append(meta_agent.job.remote(weights_set, curr_episode))
-    
+
     # initialize metric collector
-    metric_name = ['travel_dist', 'success_rate', 'explored_rate']
+    metric_name = ["travel_dist", "success_rate", "explored_rate"]
     training_data = []
     perf_metrics = {}
     for n in metric_name:
@@ -131,29 +148,31 @@ def main():
 
     # initialize training replay buffer
     experience_buffer = []
-    for i in range(15): # max 15 agents
+    for i in range(15):  # max 15 agents
         experience_buffer.append([])
-    
+
     # collect data from worker and do training
     try:
-        while True: # TODO: only terminate manually?
+        while True:  # TODO: only terminate manually?
             # wait for any job to be completed
             done_id, job_list = ray.wait(job_list)
             # get the results
             done_jobs = ray.get(done_id)
-            
+
             # save experience and metric
             for job in done_jobs:
                 job_results, metrics, info = job
                 for i in range(len(experience_buffer)):
-                    experience_buffer[i] += job_results[i]
+                    # experience_buffer[i] += job_results[i] BUG: lead to memory leak
+                    experience_ = [e.detach().cpu() for e in job_results[i]]
+                    experience_buffer[i] += experience_
                 for n in metric_name:
                     perf_metrics[n].append(metrics[n])
 
             # launch new task
             curr_episode += 1
-            job_list.append(meta_agents[info['id']].job.remote(weights_set, curr_episode))
-            
+            job_list.append(meta_agents[info["id"]].job.remote(weights_set, curr_episode))
+
             # start training
             if curr_episode % 1 == 0 and len(experience_buffer[0]) >= MINIMUM_BUFFER_SIZE:
                 print("training")
@@ -166,7 +185,7 @@ def main():
                 indices = range(len(experience_buffer[0]))
 
                 # training for n times each step
-                for j in range(8): # TODO: WHY 8? gradient accumulation?
+                for j in range(8):  # TODO: WHY 8? gradient accumulation?
                     # randomly sample a batch data
                     sample_indices = random.sample(indices, BATCH_SIZE)
                     rollouts = []
@@ -193,23 +212,85 @@ def main():
                     # TODO: what does the following lines mean??
                     # SAC
                     with torch.no_grad():
-                        q_values1, _ = dp_q_net1(node_inputs_batch, edge_inputs_batch, current_inputs_batch, node_padding_mask_batch, edge_padding_mask_batch, edge_mask_batch)
-                        q_values2, _ = dp_q_net2(node_inputs_batch, edge_inputs_batch, current_inputs_batch, node_padding_mask_batch, edge_padding_mask_batch, edge_mask_batch)
+                        q_values1, _ = dp_q_net1(
+                            node_inputs_batch,
+                            edge_inputs_batch,
+                            current_inputs_batch,
+                            node_padding_mask_batch,
+                            edge_padding_mask_batch,
+                            edge_mask_batch,
+                        )
+                        q_values2, _ = dp_q_net2(
+                            node_inputs_batch,
+                            edge_inputs_batch,
+                            current_inputs_batch,
+                            node_padding_mask_batch,
+                            edge_padding_mask_batch,
+                            edge_mask_batch,
+                        )
                         q_values = torch.min(q_values1, q_values2)
 
-                    logp = dp_policy(node_inputs_batch, edge_inputs_batch, current_inputs_batch, node_padding_mask_batch, edge_padding_mask_batch, edge_mask_batch)
-                    policy_loss = torch.sum((logp.exp().unsqueeze(2) * (log_alpha.exp().detach() * logp.unsqueeze(2) - q_values.detach())), dim=1).mean()
+                    logp = dp_policy(
+                        node_inputs_batch,
+                        edge_inputs_batch,
+                        current_inputs_batch,
+                        node_padding_mask_batch,
+                        edge_padding_mask_batch,
+                        edge_mask_batch,
+                    )
+                    policy_loss = torch.sum(
+                        (logp.exp().unsqueeze(2) * (log_alpha.exp().detach() * logp.unsqueeze(2) - q_values.detach())),
+                        dim=1,
+                    ).mean()
 
                     with torch.no_grad():
-                        next_logp = dp_policy(next_node_inputs_batch, next_edge_inputs_batch, next_current_inputs_batch, next_node_padding_mask_batch, next_edge_padding_mask_batch, next_edge_mask_batch)
-                        next_q_values1, _ = dp_target_q_net1(next_node_inputs_batch, next_edge_inputs_batch, next_current_inputs_batch, next_node_padding_mask_batch, next_edge_padding_mask_batch, next_edge_mask_batch)
-                        next_q_values2, _ = dp_target_q_net2(next_node_inputs_batch, next_edge_inputs_batch, next_current_inputs_batch, next_node_padding_mask_batch, next_edge_padding_mask_batch, next_edge_mask_batch)
+                        next_logp = dp_policy(
+                            next_node_inputs_batch,
+                            next_edge_inputs_batch,
+                            next_current_inputs_batch,
+                            next_node_padding_mask_batch,
+                            next_edge_padding_mask_batch,
+                            next_edge_mask_batch,
+                        )
+                        next_q_values1, _ = dp_target_q_net1(
+                            next_node_inputs_batch,
+                            next_edge_inputs_batch,
+                            next_current_inputs_batch,
+                            next_node_padding_mask_batch,
+                            next_edge_padding_mask_batch,
+                            next_edge_mask_batch,
+                        )
+                        next_q_values2, _ = dp_target_q_net2(
+                            next_node_inputs_batch,
+                            next_edge_inputs_batch,
+                            next_current_inputs_batch,
+                            next_node_padding_mask_batch,
+                            next_edge_padding_mask_batch,
+                            next_edge_mask_batch,
+                        )
                         next_q_values = torch.min(next_q_values1, next_q_values2)
-                        value_prime_batch = torch.sum(next_logp.unsqueeze(2).exp() * (next_q_values - log_alpha.exp() * next_logp.unsqueeze(2)), dim=1).unsqueeze(1)
+                        value_prime_batch = torch.sum(
+                            next_logp.unsqueeze(2).exp() * (next_q_values - log_alpha.exp() * next_logp.unsqueeze(2)),
+                            dim=1,
+                        ).unsqueeze(1)
                         target_q_batch = reward_batch + GAMMA * (1 - done_batch) * value_prime_batch
 
-                    q_values1, _ = dp_q_net1(node_inputs_batch, edge_inputs_batch, current_inputs_batch, node_padding_mask_batch, edge_padding_mask_batch, edge_mask_batch)
-                    q_values2, _ = dp_q_net2(node_inputs_batch, edge_inputs_batch, current_inputs_batch, node_padding_mask_batch, edge_padding_mask_batch, edge_mask_batch)
+                    q_values1, _ = dp_q_net1(
+                        node_inputs_batch,
+                        edge_inputs_batch,
+                        current_inputs_batch,
+                        node_padding_mask_batch,
+                        edge_padding_mask_batch,
+                        edge_mask_batch,
+                    )
+                    q_values2, _ = dp_q_net2(
+                        node_inputs_batch,
+                        edge_inputs_batch,
+                        current_inputs_batch,
+                        node_padding_mask_batch,
+                        edge_padding_mask_batch,
+                        edge_mask_batch,
+                    )
                     q1 = torch.gather(q_values1, 1, action_batch)
                     q2 = torch.gather(q_values2, 1, action_batch)
                     mse_loss = nn.MSELoss()
@@ -218,17 +299,23 @@ def main():
 
                     global_policy_optimizer.zero_grad()
                     policy_loss.backward()
-                    policy_grad_norm = torch.nn.utils.clip_grad_norm_(global_policy_net.parameters(), max_norm=100, norm_type=2)
+                    policy_grad_norm = torch.nn.utils.clip_grad_norm_(
+                        global_policy_net.parameters(), max_norm=100, norm_type=2
+                    )
                     global_policy_optimizer.step()
 
                     global_q_net1_optimizer.zero_grad()
                     q1_loss.backward()
-                    q_grad_norm = torch.nn.utils.clip_grad_norm_(global_q_net1.parameters(), max_norm=20000, norm_type=2)
+                    q_grad_norm = torch.nn.utils.clip_grad_norm_(
+                        global_q_net1.parameters(), max_norm=20000, norm_type=2
+                    )
                     global_q_net1_optimizer.step()
 
                     global_q_net2_optimizer.zero_grad()
                     q2_loss.backward()
-                    q_grad_norm = torch.nn.utils.clip_grad_norm_(global_q_net2.parameters(), max_norm=20000, norm_type=2)
+                    q_grad_norm = torch.nn.utils.clip_grad_norm_(
+                        global_q_net2.parameters(), max_norm=20000, norm_type=2
+                    )
                     global_q_net2_optimizer.step()
 
                     entropy = (logp * logp.exp()).sum(dim=-1)
@@ -239,7 +326,7 @@ def main():
                     log_alpha_optimizer.step()
 
                     target_q_update_counter += 1
-                    #print("target q update counter", target_q_update_counter % 1024)
+                    # print("target q update counter", target_q_update_counter % 1024)
 
                 policy_lr_decay.step()
                 q_net1_lr_decay.step()
@@ -249,8 +336,18 @@ def main():
                 perf_data = []
                 for n in metric_name:
                     perf_data.append(np.nanmean(perf_metrics[n]))
-                data = [reward_batch.mean().item(), value_prime_batch.mean().item(), policy_loss.item(), q1_loss.item(),
-                        entropy.mean().item(), policy_grad_norm.item(), q_grad_norm.item(), log_alpha.item(), alpha_loss.item(), *perf_data]
+                data = [
+                    reward_batch.mean().item(),
+                    value_prime_batch.mean().item(),
+                    policy_loss.item(),
+                    q1_loss.item(),
+                    entropy.mean().item(),
+                    policy_grad_norm.item(),
+                    q_grad_norm.item(),
+                    log_alpha.item(),
+                    alpha_loss.item(),
+                    *perf_data,
+                ]
                 training_data.append(data)
 
             # write record to tensorboard
@@ -273,7 +370,7 @@ def main():
                 q_net1_weights = global_q_net1.to(local_device).state_dict()
             weights_set.append(policy_weights)
             weights_set.append(q_net1_weights)
-            
+
             # update the target q net
             if target_q_update_counter > 64:
                 print("update target q net")
@@ -285,29 +382,31 @@ def main():
 
             # save the model
             if curr_episode % 32 == 0:
-                print('Saving model', end='\n')
-                checkpoint = {"policy_model": global_policy_net.state_dict(),
-                                "q_net1_model": global_q_net1.state_dict(),
-                                "q_net2_model": global_q_net2.state_dict(),
-                                "log_alpha": log_alpha,
-                                "policy_optimizer": global_policy_optimizer.state_dict(),
-                                "q_net1_optimizer": global_q_net1_optimizer.state_dict(),
-                                "q_net2_optimizer": global_q_net2_optimizer.state_dict(),
-                                "log_alpha_optimizer": log_alpha_optimizer.state_dict(),
-                                "episode": curr_episode,
-                                "policy_lr_decay": policy_lr_decay.state_dict(),
-                                "q_net1_lr_decay": q_net1_lr_decay.state_dict(),
-                                "q_net2_lr_decay": q_net2_lr_decay.state_dict(),
-                                "log_alpha_lr_decay": log_alpha_lr_decay.state_dict()
-                        }
+                print("Saving model", end="\n")
+                checkpoint = {
+                    "policy_model": global_policy_net.state_dict(),
+                    "q_net1_model": global_q_net1.state_dict(),
+                    "q_net2_model": global_q_net2.state_dict(),
+                    "log_alpha": log_alpha,
+                    "policy_optimizer": global_policy_optimizer.state_dict(),
+                    "q_net1_optimizer": global_q_net1_optimizer.state_dict(),
+                    "q_net2_optimizer": global_q_net2_optimizer.state_dict(),
+                    "log_alpha_optimizer": log_alpha_optimizer.state_dict(),
+                    "episode": curr_episode,
+                    "policy_lr_decay": policy_lr_decay.state_dict(),
+                    "q_net1_lr_decay": q_net1_lr_decay.state_dict(),
+                    "q_net2_lr_decay": q_net2_lr_decay.state_dict(),
+                    "log_alpha_lr_decay": log_alpha_lr_decay.state_dict(),
+                }
                 path_checkpoint = "./" + model_path + "/checkpoint.pth"
                 torch.save(checkpoint, path_checkpoint)
-                print('Saved model', end='\n')
-                    
+                print("Saved model", end="\n")
+
     except KeyboardInterrupt:
         print("CTRL_C pressed. Killing remote workers")
         for a in meta_agents:
             ray.kill(a)
+
 
 if __name__ == "__main__":
     main()

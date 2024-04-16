@@ -1,12 +1,20 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
-class Node():
-    def __init__(self, coords, frontiers, robot_belief, target_position):
+
+class Node:
+    def __init__(self, coords, frontiers, robot_belief, target_position, costmap: np.ndarray = None):
+        """
+        coords: (x, y)
+        """
         self.coords = coords
         self.observable_frontiers = []
         self.sensor_range = 80
         self.target_position = target_position
         self.direction_vector = self.get_direction_vector()
+        self.cost = 0
+        if costmap is not None:
+            self.cost = costmap[int(self.coords[1]), int(self.coords[0])]
         self.initialize_observable_frontiers(frontiers, robot_belief)
         self.utility = self.get_node_utility()
         if self.utility == 0:
@@ -26,7 +34,7 @@ class Node():
     def get_direction_vector(self):
         dx = self.target_position[0] - self.coords[0]
         dy = self.target_position[1] - self.coords[1]
-        mag = (dx**2 + dy**2)** .5
+        mag = (dx**2 + dy**2) ** 0.5
         if mag != 0:
             dx = dx / mag
             dy = dy / mag
@@ -37,8 +45,15 @@ class Node():
     def get_node_utility(self):
         return len(self.observable_frontiers)
 
+    def get_node_cost(self):
+        return self.cost
+
     def update_observable_frontiers(self, observed_frontiers, new_frontiers, robot_belief):
-        # import ipdb; ipdb.set_trace()
+        """
+        robot_belief: current lidar scan
+        observed_frontiers: observed frontiers for current robot's location
+        new_frontiers: new frontiers for current robot's location
+        """
         # print(f"observed_frontiers.shape: {observed_frontiers.shape}")
         # if observed_frontiers != []:
         if observed_frontiers.shape[0] != 0:

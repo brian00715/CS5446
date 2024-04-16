@@ -1,26 +1,44 @@
-import matplotlib.pyplot as plt
-import os
 import math
-import skimage.io
-from skimage.measure import block_reduce
-from scipy import *
-from sensor import *
-from graph_generator import *
-from node import *
+import os
 import time
 
-class Env():
+import ipdb
+import matplotlib.pyplot as plt
+import PIL
+import skimage.io
+from scipy import *
+from skimage.measure import block_reduce
+
+from parameter import *
+from graph_generator import *
+from node import *
+from sensor import collision_check, sensor_work
+from util import generate_cost_map
+
+
+class Env:
+    """
+
+    self.ground_truth: 2d array of bools (same dimention as map), indicating the the navigable area. True means navigable.
+    self.robot_belief: robot's current lidar scan
+    self.frontiers: 2d array of frontier points locations (in pixel map)
+    self.graph: graph of nodes, actually the edges
+    """
+
     def __init__(self, map_index, k_size=20, plot=False, test=False):
         self.test = test
         if self.test:
-            self.map_dir = f'DungeonMaps/pp/test'
+            self.map_dir = f"DungeonMaps/pp/test"
         else:
-            self.map_dir = f'DungeonMaps/pp/train'
+            self.map_dir = f"DungeonMaps/pp/train"
         self.map_list = os.listdir(self.map_dir)
         self.map_list.sort(reverse=True)
         self.map_index = map_index % np.size(self.map_list)
-        self.ground_truth, self.start_position, self.target_position = self.import_ground_truth_pp(
-            self.map_dir + '/' + self.map_list[self.map_index])
+        map_file = self.map_dir + "/" + self.map_list[self.map_index]
+        self.ground_truth, self.start_position, self.target_position = self.import_ground_truth_pp(map_file)
+        map_data = PIL.Image.open(map_file)
+        map_data = np.array(map_data)
+        self.costmap = generate_cost_map(map_data, inflation_radius=COSTMAP_RADIUS, inflation_scale=COSTMAP_SCALE)
         self.ground_truth_size = np.shape(self.ground_truth)
         self.robot_belief = np.ones(self.ground_truth_size) * 127  # unexplored
         self.downsampled_belief = None
@@ -29,10 +47,24 @@ class Env():
         self.sensor_range = 80
         self.explored_rate = 0
         self.frontiers = None
-        self.graph_generator = Graph_generator(map_size=self.ground_truth_size, sensor_range=self.sensor_range, k_size=k_size, target_position = self.target_position, plot=plot)
+        self.graph_generator = Graph_generator(
+            map_size=self.ground_truth_size,
+            sensor_range=self.sensor_range,
+            k_size=k_size,
+            target_position=self.target_position,
+            costmap=self.costmap,
+            plot=plot,
+        )
         self.graph_generator.route_node.append(self.start_position)
-        self.node_coords, self.graph, self.node_utility, self.indicator, self.direction_vector = None, None, None, None, None
-        
+        self.node_coords, self.graph, self.node_utility, self.indicator, self.direction_vector, self.node_cost = (
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
         self.begin()
 
         self.plot = plot
@@ -48,54 +80,74 @@ class Env():
         return index
 
     def begin(self):
-        self.robot_belief = self.update_robot_belief(self.start_position, self.sensor_range, self.robot_belief,
-                                                     self.ground_truth)
-        self.downsampled_belief = block_reduce(self.robot_belief.copy(), block_size=(self.resolution, self.resolution),
-                                               func=np.min)
+        self.robot_belief = self.update_robot_belief(
+            self.start_position, self.sensor_range, self.robot_belief, self.ground_truth
+        )
+        self.downsampled_belief = block_reduce(
+            self.robot_belief.copy(), block_size=(self.resolution, self.resolution), func=np.min
+        )
         self.frontiers = self.find_frontier()
         self.old_robot_belief = copy.deepcopy(self.robot_belief)
-        self.node_coords, self.graph, self.node_utility, self.indicator, self.direction_vector = self.graph_generator.generate_graph(
-            self.start_position, self.ground_truth, self.robot_belief, self.frontiers)
+        self.node_coords, self.graph, self.node_utility, self.indicator, self.direction_vector, self.node_cost = (
+            self.graph_generator.generate_graph(
+                self.start_position, self.ground_truth, self.robot_belief, self.frontiers
+            )
+        )
 
     def step(self, robot_position, next_position, travel_dist):
         dist = np.linalg.norm(robot_position - next_position)
         dist_to_target = np.linalg.norm(next_position - self.target_position)
-        astar_dist_cur_to_target, _ = self.graph_generator.find_shortest_path(robot_position, self.target_position, 
-                                                                           self.graph_generator.ground_truth_node_coords, self.graph_generator.ground_truth_graph)
-        astar_dist_next_to_target, _ = self.graph_generator.find_shortest_path(next_position, self.target_position, 
-                                                                            self.graph_generator.ground_truth_node_coords, self.graph_generator.ground_truth_graph)
+        astar_dist_cur_to_target, _ = self.graph_generator.find_shortest_path(
+            robot_position,
+            self.target_position,
+            self.graph_generator.ground_truth_node_coords,
+            self.graph_generator.ground_truth_graph,
+        )
+        astar_dist_next_to_target, _ = self.graph_generator.find_shortest_path(
+            next_position,
+            self.target_position,
+            self.graph_generator.ground_truth_node_coords,
+            self.graph_generator.ground_truth_graph,
+        )
         travel_dist += dist
         robot_position = next_position
         self.graph_generator.route_node.append(robot_position)
         next_node_index = self.find_index_from_coords(robot_position)
         self.graph_generator.nodes_list[next_node_index].set_visited()
-        self.robot_belief = self.update_robot_belief(robot_position, self.sensor_range, self.robot_belief,
-                                                     self.ground_truth)
-        self.downsampled_belief = block_reduce(self.robot_belief.copy(), block_size=(self.resolution, self.resolution),
-                                               func=np.min)
+        self.robot_belief = self.update_robot_belief(
+            robot_position, self.sensor_range, self.robot_belief, self.ground_truth
+        )
+        self.downsampled_belief = block_reduce(
+            self.robot_belief.copy(), block_size=(self.resolution, self.resolution), func=np.min
+        )
         frontiers = self.find_frontier()
         self.explored_rate = self.evaluate_exploration_rate()
         reward, done = self.calculate_reward(astar_dist_cur_to_target, astar_dist_next_to_target, dist_to_target)
         if self.plot:
             self.xPoints.append(robot_position[0])
             self.yPoints.append(robot_position[1])
-        self.node_coords, self.graph, self.node_utility, self.indicator, self.direction_vector = self.graph_generator.update_graph(
-            robot_position, self.robot_belief, self.old_robot_belief, frontiers, self.frontiers)
+        self.node_coords, self.graph, self.node_utility, self.indicator, self.direction_vector, self.node_cost = (
+            self.graph_generator.update_graph(
+                robot_position, self.robot_belief, self.old_robot_belief, frontiers, self.frontiers
+            )
+        )
         self.old_robot_belief = copy.deepcopy(self.robot_belief)
         self.frontiers = frontiers
 
         return reward, done, robot_position, travel_dist
-    
+
     def import_ground_truth_pp(self, map_index):
         ground_truth = (skimage.io.imread(map_index, 1) * 255).astype(int)
-        robot_location = np.nonzero(ground_truth == 209)
-        robot_location = np.array([np.array(robot_location)[1, 127], np.array(robot_location)[0, 127]])
+        robot_location = np.nonzero(ground_truth == 209)  # a region
+        robot_location = np.array(
+            [np.array(robot_location)[1, 127], np.array(robot_location)[0, 127]]
+        )  # use the center of region as the location
         target_location = np.nonzero(ground_truth == 68)
         target_location = np.array([np.array(target_location)[1, 127], np.array(target_location)[0, 127]])
-        ground_truth = (ground_truth > 150)|((ground_truth<=80)&(ground_truth>=60))
+        ground_truth = (ground_truth > 150) | ((ground_truth <= 80) & (ground_truth >= 60))
         ground_truth = ground_truth * 254 + 1
         return ground_truth, robot_location, target_location
-    
+
     def free_cells(self):
         index = np.where(self.ground_truth == 255)
         free = np.asarray([index[1], index[0]]).T
@@ -113,6 +165,12 @@ class Env():
         if dist_to_target == 0:
             reward += 20
             done = True
+        # calcu total node cost
+        total_cost = 0
+        for node in self.graph_generator.route_node:
+            total_cost += self.costmap[int(node[1]), int(node[0])]
+        total_cost /= 255
+        reward -= COST_REWARD_COEFF * total_cost
         return reward, done
 
     def evaluate_exploration_rate(self):
@@ -125,14 +183,25 @@ class Env():
         mapping = self.downsampled_belief.copy()
         belief = self.downsampled_belief.copy()
         mapping = (mapping == 127) * 1
-        mapping = np.lib.pad(mapping, ((1, 1), (1, 1)), 'constant', constant_values=0)
-        fro_map = mapping[2:][:, 1:x_len + 1] + mapping[:y_len][:, 1:x_len + 1] + mapping[1:y_len + 1][:, 2:] + \
-                  mapping[1:y_len + 1][:, :x_len] + mapping[:y_len][:, 2:] + mapping[2:][:, :x_len] + mapping[2:][:,
-                                                                                                      2:] + \
-                  mapping[:y_len][:, :x_len]
-        ind_free = np.where(belief.ravel(order='F') == 255)[0]
-        ind_fron_1 = np.where(1 < fro_map.ravel(order='F'))[0]
-        ind_fron_2 = np.where(fro_map.ravel(order='F') < 8)[0]
+        mapping = np.lib.pad(mapping, ((1, 1), (1, 1)), "constant", constant_values=0)
+        """利用卷积判断frontier
+        如果中心像素的fro_map值为0,说明8邻域都不是未探索区域,即完全被探索过;
+        如果值为8,说明8邻域都是未探索区域,即完全未探索;
+        只有fro_map值在1-7的范围内时,说明存在未探索区域和已探索区域的交界处,即frontier。
+        """
+        fro_map = (
+            mapping[2:][:, 1 : x_len + 1]
+            + mapping[:y_len][:, 1 : x_len + 1]
+            + mapping[1 : y_len + 1][:, 2:]
+            + mapping[1 : y_len + 1][:, :x_len]
+            + mapping[:y_len][:, 2:]
+            + mapping[2:][:, :x_len]
+            + mapping[2:][:, 2:]
+            + mapping[:y_len][:, :x_len]
+        )
+        ind_free = np.where(belief.ravel(order="F") == 255)[0]
+        ind_fron_1 = np.where(1 < fro_map.ravel(order="F"))[0]
+        ind_fron_2 = np.where(fro_map.ravel(order="F") < 8)[0]
         ind_fron = np.intersect1d(ind_fron_1, ind_fron_2)
         ind_to = np.intersect1d(ind_free, ind_fron)
         map_x = x_len
@@ -147,22 +216,22 @@ class Env():
         return f
 
     def plot_env(self, n, path, step, travel_dist):
-        plt.switch_backend('agg')
+        plt.switch_backend("agg")
         # plt.ion()
         plt.cla()
-        plt.imshow(self.robot_belief, cmap='gray')
+        plt.imshow(self.robot_belief, cmap="gray")
         plt.axis((0, self.ground_truth_size[1], self.ground_truth_size[0], 0))
         # for i in range(len(self.graph_generator.x)):
         #    plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan', zorder=1)  # plot edges will take long time
         plt.scatter(self.node_coords[:, 0], self.node_coords[:, 1], c=self.node_utility, zorder=5)
-        plt.scatter(self.frontiers[:, 0], self.frontiers[:, 1], c='r', s=2, zorder=3)
-        plt.plot(self.xTarget, self.yTarget, 'o', markersize = 20)
-        plt.plot(self.xPoints, self.yPoints, 'b', linewidth=2)
-        plt.plot(self.xPoints[-1], self.yPoints[-1], 'mo', markersize=8)
-        plt.plot(self.xPoints[0], self.yPoints[0], 'co', markersize=8)
-        plt.suptitle('Explored ratio: {:.4g}  Travel distance: {:.4g}'.format(self.explored_rate, travel_dist))
+        plt.scatter(self.frontiers[:, 0], self.frontiers[:, 1], c="r", s=2, zorder=3)
+        plt.plot(self.xTarget, self.yTarget, "o", markersize=20)
+        plt.plot(self.xPoints, self.yPoints, "b", linewidth=2)
+        plt.plot(self.xPoints[-1], self.yPoints[-1], "mo", markersize=8)
+        plt.plot(self.xPoints[0], self.yPoints[0], "co", markersize=8)
+        plt.suptitle("Explored ratio: {:.4g}  Travel distance: {:.4g}".format(self.explored_rate, travel_dist))
         plt.tight_layout()
-        plt.savefig('{}/{}_{}_samples.png'.format(path, n, step, dpi=150))
+        plt.savefig("{}/{}_{}_samples.png".format(path, n, step, dpi=150))
         plt.show()
-        frame = '{}/{}_{}_samples.png'.format(path, n, step)
+        frame = "{}/{}_{}_samples.png".format(path, n, step)
         self.frame_files.append(frame)

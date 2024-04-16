@@ -4,9 +4,11 @@ import copy
 from parameter import *
 from node import Node
 from graph import Graph, a_star
+import matplotlib.pyplot as plt
+
 
 class Graph_generator:
-    def __init__(self, map_size, k_size, sensor_range, target_position, plot=False):
+    def __init__(self, map_size, k_size, sensor_range, target_position, costmap, plot=False):
         self.k_size = k_size
         self.graph = Graph()
         self.ground_truth_graph = Graph()
@@ -17,14 +19,15 @@ class Graph_generator:
         self.map_x = map_size[1]
         self.map_y = map_size[0]
         self.uniform_points = self.generate_uniform_points()
+        self.costmap = costmap
         self.sensor_range = sensor_range
         self.route_node = []
-        self.nodes_list = []
+        self.nodes_list = []  # all visited and observed nodes
         self.node_utility = None
         self.indicator = None
         self.direction_vector = None
         self.target_position = target_position
-    
+
     def generate_node_coords(self, robot_location, robot_belief):
         free_area = self.free_area(robot_belief)
         free_area_to_check = free_area[:, 0] + free_area[:, 1] * 1j
@@ -38,42 +41,55 @@ class Graph_generator:
         self.graph = Graph()
         self.x = []
         self.y = []
-        
+
     def edge_clear(self, coords):
         node_index = str(self.find_index_from_coords(self.node_coords, coords))
         self.graph.clear_edge(node_index)
 
-    def generate_graph(self, robot_location, ground_truth_belief, robot_belief, frontiers):        
+    def generate_graph(self, robot_location, ground_truth_belief, robot_belief, frontiers):
         self.node_coords = self.generate_node_coords(robot_location, robot_belief)
         self.ground_truth_node_coords = self.generate_node_coords(robot_location, ground_truth_belief)
         self.find_k_neighbor_all_nodes(self.node_coords, robot_belief)
         self.find_k_neighbor_all_nodes(self.ground_truth_node_coords, ground_truth_belief, ground_truth=True)
-        
+
         self.node_utility = []
         self.direction_vector = []
+        self.node_cost = []
         for coords in self.node_coords:
-            node = Node(coords, frontiers, robot_belief, self.target_position)
+            node = Node(coords, frontiers, robot_belief, self.target_position, self.costmap)
             self.nodes_list.append(node)
             utility = node.utility
             direction_vector = node.direction_vector
             self.direction_vector.append(direction_vector)
             self.node_utility.append(utility)
+            self.node_cost.append(node.cost)
 
         self.direction_vector = np.array(self.direction_vector)
         self.node_utility = np.array(self.node_utility)
+        self.node_cost = np.array(self.node_cost)
         self.indicator = np.zeros((self.node_coords.shape[0], 1))
-        x = self.node_coords[:,0] + self.node_coords[:,1]*1j
+        x = self.node_coords[:, 0] + self.node_coords[:, 1] * 1j
         for node in self.route_node:
-            index = np.argwhere(x.reshape(-1) == node[0]+node[1]*1j)[0]
+            index = np.argwhere(x.reshape(-1) == node[0] + node[1] * 1j)[0]
             self.indicator[index] = 1
-        return self.node_coords, self.graph.edges, self.node_utility, self.indicator, self.direction_vector
+        return (
+            self.node_coords,
+            self.graph.edges,
+            self.node_utility,
+            self.indicator,
+            self.direction_vector,
+            self.node_cost,
+        )
 
     def update_graph(self, robot_position, robot_belief, old_robot_belief, frontiers, old_frontiers):
+        """add new observed nodes, update the graph, update the observable frontiers of the nodes"""
         # add uniform points in the new free area to the node coords
         new_free_area = self.free_area((robot_belief - old_robot_belief > 0) * 255)
         free_area_to_check = new_free_area[:, 0] + new_free_area[:, 1] * 1j
         uniform_points_to_check = self.uniform_points[:, 0] + self.uniform_points[:, 1] * 1j
-        _, _, candidate_indices = np.intersect1d(free_area_to_check, uniform_points_to_check, return_indices=True)
+        _, _, candidate_indices = np.intersect1d(
+            free_area_to_check, uniform_points_to_check, return_indices=True
+        )  # new free and uniform points
         new_node_coords = self.uniform_points[candidate_indices]
         old_node_coords = copy.deepcopy(self.node_coords)
         self.node_coords = np.concatenate((self.node_coords, new_node_coords, self.target_position.reshape(1, 2)))
@@ -84,12 +100,14 @@ class Graph_generator:
         old_frontiers_to_check = old_frontiers[:, 0] + old_frontiers[:, 1] * 1j
         new_frontiers_to_check = frontiers[:, 0] + frontiers[:, 1] * 1j
         observed_frontiers_index = np.where(
-            np.isin(old_frontiers_to_check, new_frontiers_to_check, assume_unique=True) == False)
+            np.isin(old_frontiers_to_check, new_frontiers_to_check, assume_unique=True) == False
+        )
         new_frontiers_index = np.where(
-            np.isin(new_frontiers_to_check, old_frontiers_to_check, assume_unique=True) == False)
+            np.isin(new_frontiers_to_check, old_frontiers_to_check, assume_unique=True) == False
+        )
         observed_frontiers = old_frontiers[observed_frontiers_index]
         new_frontiers = frontiers[new_frontiers_index]
-        for node in self.nodes_list:
+        for node in self.nodes_list:  # prune and update the observable frontiers
             if np.linalg.norm(node.coords - robot_position) > 2 * self.sensor_range:
                 pass
             elif node.zero_utility_node is True:
@@ -98,24 +116,34 @@ class Graph_generator:
                 node.update_observable_frontiers(observed_frontiers, new_frontiers, robot_belief)
 
         for new_coords in new_node_coords:
-            node = Node(new_coords, frontiers, robot_belief, self.target_position)
+            node = Node(new_coords, frontiers, robot_belief, self.target_position, self.costmap)
             self.nodes_list.append(node)
         self.direction_vector = []
         self.node_utility = []
+        self.node_cost = []
         for i, coords in enumerate(self.node_coords):
             utility = self.nodes_list[i].utility
-            node = Node(coords, frontiers, robot_belief, self.target_position)
+            node = Node(coords, frontiers, robot_belief, self.target_position, self.costmap)
             self.node_utility.append(utility)
             direction_vector = node.direction_vector
             self.direction_vector.append(direction_vector)
+            self.node_cost.append(node.cost)
         self.direction_vector = np.array(self.direction_vector)
         self.node_utility = np.array(self.node_utility)
+        self.node_cost = np.array(self.node_cost)
         self.indicator = np.zeros((self.node_coords.shape[0], 1))
         x = self.node_coords[:, 0] + self.node_coords[:, 1] * 1j
         for node in self.route_node:
             index = np.argwhere(x.reshape(-1) == node[0] + node[1] * 1j)
             self.indicator[index] = 1
-        return self.node_coords, self.graph.edges, self.node_utility, self.indicator, self.direction_vector
+        return (
+            self.node_coords,
+            self.graph.edges,
+            self.node_utility,
+            self.indicator,
+            self.direction_vector,
+            self.node_cost,
+        )
 
     def generate_uniform_points(self):
         x = np.linspace(0, self.map_x - 1, 30).round().astype(int)
@@ -139,10 +167,10 @@ class Graph_generator:
     def find_nearest_node_index(self, position):
         index = np.argmin(np.linalg.norm(self.node_coords - position, axis=1))
         return index
-    
+
     def find_index_from_coords(self, node_coords, p):
         return np.argmin(np.linalg.norm(node_coords - p, axis=1))
-    
+
     def find_k_neighbor(self, coords, node_coords, robot_belief):
         dist_list = np.linalg.norm((coords - node_coords), axis=-1)
         sorted_index = np.argsort(dist_list)
@@ -236,4 +264,3 @@ class Graph_generator:
             assert route != []
         route = list(map(str, route))
         return dist, route
-

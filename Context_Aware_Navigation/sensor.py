@@ -9,16 +9,16 @@ def collision_check(x0, y0, x1, y1, ground_truth, robot_belief):
     y1 = y1.round()
     dx, dy = abs(x1 - x0), abs(y1 - y0)
     x, y = x0, y0
-    error = dx - dy
+    error = dx - dy # used to encourage diagonal movement
     x_inc = 1 if x1 > x0 else -1
     y_inc = 1 if y1 > y0 else -1
     dx *= 2
     dy *= 2
     collision_flag = 0
-    max_collision = 10
+    max_collision = 10 # used to padding the collision
     while 0 <= x < ground_truth.shape[1] and 0 <= y < ground_truth.shape[0]:
         k = ground_truth.item(y, x)
-        if k == 1 and collision_flag < max_collision:
+        if k == 1 and collision_flag < max_collision: # k=1 means collision
             collision_flag += 1
             if collision_flag >= max_collision:
                 break

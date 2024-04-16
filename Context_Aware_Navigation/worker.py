@@ -6,8 +6,9 @@ import torch
 from env import Env
 from parameter import *
 
+
 class Worker:
-    def __init__(self, meta_agent_id, policy_net, q_net, global_step, device='cuda', greedy=False, save_image=True):
+    def __init__(self, meta_agent_id, policy_net, q_net, global_step, device="cuda", greedy=False, save_image=True):
         self.device = device
         self.greedy = greedy
         self.metaAgentID = meta_agent_id
@@ -30,21 +31,32 @@ class Worker:
             self.episode_buffer.append([])
 
     def get_observations(self):
+        """
+        Returns:
+            node_inputs: (1,self.node_padding_size,7) 7=coords(2)+utility(1)+indicator(1)+direction_vector(3)
+            edge_inputs: (1,1,k_size) k_size: number of adjacent nodes
+            edge_mask: adjacency matrix of the graph
+        """
         # get observations
         node_coords = copy.deepcopy(self.env.node_coords)
         graph = copy.deepcopy(self.env.graph)
         node_utility = copy.deepcopy(self.env.node_utility)
         indicator = copy.deepcopy(self.env.indicator)
         direction_vector = copy.deepcopy(self.env.direction_vector)
+        node_cost = copy.deepcopy(self.env.node_cost)
         # normalize observations
         node_coords = node_coords / 640
         node_utility = node_utility / 50
+        node_cost = node_cost / 255
         n_nodes = node_coords.shape[0]
         node_utility_inputs = node_utility.reshape(n_nodes, 1)
+        node_cost = node_cost.reshape(n_nodes, 1)
         direction_nums = direction_vector.shape[0]
         direction_vector_inputs = direction_vector.reshape(direction_nums, 3)
         direction_vector_inputs[:, 2] /= 80
-        node_inputs = np.concatenate((node_coords, node_utility_inputs, indicator, direction_vector_inputs), axis=1)
+        node_inputs = np.concatenate(
+            (node_coords, node_utility_inputs, indicator, direction_vector_inputs, node_cost), axis=1
+        )
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)  # (1, node_padding_size+1, 3)
         assert node_coords.shape[0] < self.node_padding_size
         padding = torch.nn.ZeroPad2d((0, 0, 0, self.node_padding_size - node_coords.shape[0]))
@@ -52,7 +64,8 @@ class Worker:
         # calculate a mask to padded nodes
         node_padding_mask = torch.zeros((1, 1, node_coords.shape[0]), dtype=torch.int64).to(self.device)
         node_padding = torch.ones((1, 1, self.node_padding_size - node_coords.shape[0]), dtype=torch.int64).to(
-            self.device)
+            self.device
+        )
         node_padding_mask = torch.cat((node_padding_mask, node_padding), dim=-1)
         # get the node index of the current robot position
         current_node_index = self.env.find_index_from_coords(self.robot_position)
@@ -68,7 +81,8 @@ class Worker:
         edge_mask = torch.from_numpy(adjacent_matrix).float().unsqueeze(0).to(self.device)
         assert len(edge_inputs) < self.node_padding_size
         padding = torch.nn.ConstantPad2d(
-            (0, self.node_padding_size - len(edge_inputs), 0, self.node_padding_size - len(edge_inputs)), 1)
+            (0, self.node_padding_size - len(edge_inputs), 0, self.node_padding_size - len(edge_inputs)), 1
+        )
         edge_mask = padding(edge_mask)
         edge = edge_inputs[current_index]
         while len(edge) < self.k_size:
@@ -85,8 +99,9 @@ class Worker:
     def select_node(self, observations):
         node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask = observations
         with torch.no_grad():
-            logp_list = self.local_policy_net(node_inputs, edge_inputs, current_index, node_padding_mask,
-                                              edge_padding_mask, edge_mask)
+            logp_list = self.local_policy_net(
+                node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask
+            )
         if self.greedy:
             action_index = torch.argmax(logp_list, dim=1).long()
         else:
@@ -123,11 +138,13 @@ class Worker:
     def run_episode(self, curr_episode):
         done = False
         observations = self.get_observations()
-        for i in range(128):
+        for i in range(128): # 128 steps for each episode
             self.save_observations(observations)
             next_position, action_index = self.select_node(observations)
             self.save_action(action_index)
-            reward, done, self.robot_position, self.travel_dist = self.env.step(self.robot_position, next_position, self.travel_dist)
+            reward, done, self.robot_position, self.travel_dist = self.env.step(
+                self.robot_position, next_position, self.travel_dist
+            )
             self.save_reward_done(reward, done)
             observations = self.get_observations()
             self.save_next_observations(observations)
@@ -137,9 +154,9 @@ class Worker:
                 self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
             if done:
                 break
-        self.perf_metrics['travel_dist'] = self.travel_dist
-        self.perf_metrics['explored_rate'] = self.env.explored_rate
-        self.perf_metrics['success_rate'] = done
+        self.perf_metrics["travel_dist"] = self.travel_dist
+        self.perf_metrics["explored_rate"] = self.env.explored_rate
+        self.perf_metrics["success_rate"] = done
         if self.save_image:
             path = gifs_path
             self.make_gif(path, curr_episode)
@@ -155,14 +172,14 @@ class Worker:
                 if j in edge_inputs[i]:
                     bias_matrix[i][j] = 0
         return bias_matrix
-    
+
     def make_gif(self, path, n):
-        with imageio.get_writer('{}/{}_explored_rate_{:.4g}.gif'.format(path, n, self.env.explored_rate), mode='I', duration=0.5) as writer:
+        with imageio.get_writer(
+            "{}/{}_explored_rate_{:.4g}.gif".format(path, n, self.env.explored_rate), mode="I", duration=0.5
+        ) as writer:
             for frame in self.env.frame_files:
                 image = imageio.imread(frame)
                 writer.append_data(image)
-        print('gif complete\n')
+        print("gif complete\n")
         for filename in self.env.frame_files[:-1]:
             os.remove(filename)
-
-
