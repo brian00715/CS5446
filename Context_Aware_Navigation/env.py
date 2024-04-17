@@ -13,9 +13,9 @@ class Env():
     def __init__(self, map_index, k_size=4, plot=False, test=False):
         self.test = test
         if self.test:
-            self.map_dir = f'Context_Aware_Navigation/DungeonMaps/pp/test'
+            self.map_dir = f'DungeonMaps/pp/test'
         else:
-            self.map_dir = f'Context_Aware_Navigation/DungeonMaps/pp/train'
+            self.map_dir = f'DungeonMaps/pp/train'
         self.map_list = os.listdir(self.map_dir)
         self.map_list.sort(reverse=True)
         self.map_index = map_index % np.size(self.map_list)
@@ -172,5 +172,7 @@ class Env():
 
 if __name__ == '__main__':
     env = Env(0, plot=True)
+    env.plot_env(0, 'test1', 0, 0)
     print("env start_position: ", env.start_position)
-    env.step(env.start_position, env.start_position + np.array([0, 1]), 0)
+    env.step(env.start_position, env.graph_generator.node_coords[2], 0)
+    env.plot_env(0, 'test1', 1, 1)

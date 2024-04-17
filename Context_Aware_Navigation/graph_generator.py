@@ -59,7 +59,7 @@ class Graph_generator:
     
     def sector_sampling(self, robot_location, min_radius, max_radius, num_arcs, num_points_per_arc):
         all_xs, all_ys = [], []
-        direction_vector = self.route_node[-2] - robot_location
+        direction_vector =  robot_location - self.route_node[-2]
         x_center, y_center = robot_location[0], robot_location[1]
         # Calculate the angles for the sector
         angle_center = np.arctan2(direction_vector[1], direction_vector[0])
@@ -85,7 +85,7 @@ class Graph_generator:
             sampled_points = self.polar_sampling(robot_location, 20, self.sensor_range, self.sensor_range // 20, 12)
         else:
             # Generate nodes coordinates in the sector area around the robot
-            sampled_points = self.sector_sampling(robot_location, 20, self.sensor_range, self.sensor_range // 20, 5)
+            sampled_points = self.sector_sampling(robot_location, 20, self.sensor_range, self.sensor_range // 20, 6)
         sampled_points_to_check = sampled_points[:, 0] + sampled_points[:, 1] * 1j
         _, _, candidate_indices = np.intersect1d(free_area_to_check, sampled_points_to_check, return_indices=True)
         node_coords = sampled_points[candidate_indices]
@@ -135,7 +135,7 @@ class Graph_generator:
         # uniform_points_to_check = self.uniform_points[:, 0] + self.uniform_points[:, 1] * 1j
         # _, _, candidate_indices = np.intersect1d(free_area_to_check, uniform_points_to_check, return_indices=True)
         # new_node_coords = self.uniform_points[candidate_indices]
-        sampled_points = self.polar_sampling(robot_position, 20, self.sensor_range, self.sensor_range // 20, 12)
+        sampled_points = self.sector_sampling(robot_position, 20, self.sensor_range, self.sensor_range // 20, 6)
         sampled_points_to_check = sampled_points[:, 0] + sampled_points[:, 1] * 1j
         _, _, candidate_indices = np.intersect1d(free_area_to_check, sampled_points_to_check, return_indices=True)
         new_node_coords = sampled_points[candidate_indices]
