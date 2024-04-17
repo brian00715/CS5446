@@ -19,6 +19,7 @@ class Graph_generator:
         self.map_x = map_size[1]
         self.map_y = map_size[0]
         self.uniform_points = self.generate_uniform_points()
+        print(f"uniform_points: {self.uniform_points.shape}")
         self.costmap = costmap
         self.sensor_range = sensor_range
         self.route_node = []
@@ -146,8 +147,8 @@ class Graph_generator:
         )
 
     def generate_uniform_points(self):
-        x = np.linspace(0, self.map_x - 1, 30).round().astype(int)
-        y = np.linspace(0, self.map_y - 1, 30).round().astype(int)
+        x = np.linspace(0, self.map_x - 1, SAMPLE_DENSITY).round().astype(int)
+        y = np.linspace(0, self.map_y - 1, SAMPLE_DENSITY).round().astype(int)
         t1, t2 = np.meshgrid(x, y)
         points = np.vstack([t1.T.ravel(), t2.T.ravel()]).T
         return points

@@ -12,3 +12,8 @@
 
 **.pth
 **tmp
+
+Context_Aware_Navigation/gifs/
+Context_Aware_Navigation/model/
+Context_Aware_Navigation/results/
+Context_Aware_Navigation/train/

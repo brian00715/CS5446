@@ -11,7 +11,7 @@ from test_parameter import *
 
 
 class TestWorker:
-    def __init__(self, meta_agent_id, policy_net, global_step, device='cuda', greedy=False, save_image=False):
+    def __init__(self, meta_agent_id, policy_net, global_step, device="cuda", greedy=False, save_image=False):
         self.device = device
         self.greedy = greedy
         self.metaAgentID = meta_agent_id
@@ -32,8 +32,9 @@ class TestWorker:
         for i in range(128):
             next_position, action_index = self.select_node(observations)
 
-            reward, done, self.robot_position, self.travel_dist = self.env.step(self.robot_position, next_position,
-                                                                                self.travel_dist)
+            reward, done, self.robot_position, self.travel_dist = self.env.step(
+                self.robot_position, next_position, self.travel_dist
+            )
 
             observations = self.get_observations()
 
@@ -41,10 +42,10 @@ class TestWorker:
             if SAVE_TRAJECTORY:
                 if not os.path.exists(trajectory_path):
                     os.makedirs(trajectory_path)
-                csv_filename = f'results/trajectory/ours_trajectory_result.csv'
+                csv_filename = f"{trajectory_path}/ours_trajectory_result.csv"
                 new_file = False if os.path.exists(csv_filename) else True
-                field_names = ['dist', 'area']
-                with open(csv_filename, 'a') as csvfile:
+                field_names = ["dist", "area"]
+                with open(csv_filename, "a") as csvfile:
                     writer = csv.writer(csvfile)
                     if new_file:
                         writer.writerow(field_names)
@@ -60,22 +61,22 @@ class TestWorker:
             if done:
                 break
 
-        self.perf_metrics['travel_dist'] = self.travel_dist
-        self.perf_metrics['explored_rate'] = self.env.explored_rate
-        self.perf_metrics['success_rate'] = done
+        self.perf_metrics["travel_dist"] = self.travel_dist
+        self.perf_metrics["explored_rate"] = self.env.explored_rate
+        self.perf_metrics["success_rate"] = done
 
         # save final path length
         if SAVE_LENGTH:
             if not os.path.exists(length_path):
                 os.makedirs(length_path)
-            csv_filename = f'results/length/ours_length_result.csv'
+            csv_filename = f"{length_path}/ours_length_result.csv"
             new_file = False if os.path.exists(csv_filename) else True
-            field_names = ['dist']
-            with open(csv_filename, 'a') as csvfile:
+            field_names = ["dist"]
+            with open(csv_filename, "a") as csvfile:
                 writer = csv.writer(csvfile)
                 if new_file:
                     writer.writerow(field_names)
-                csv_data = np.array([self.travel_dist]).reshape(-1,1)
+                csv_data = np.array([self.travel_dist]).reshape(-1, 1)
                 writer.writerows(csv_data)
 
         # save gif
@@ -89,20 +90,25 @@ class TestWorker:
         graph = copy.deepcopy(self.env.graph)
         node_utility = copy.deepcopy(self.env.node_utility)
         indicator = copy.deepcopy(self.env.indicator)
+        node_cost = copy.deepcopy(self.env.node_cost)
 
         direction_vector = copy.deepcopy(self.env.direction_vector)
 
         # normalize observations
         node_coords = node_coords / 640
         node_utility = node_utility / 50
+        node_cost = node_cost / 255
 
         # transfer to node inputs tensor
         n_nodes = node_coords.shape[0]
         node_utility_inputs = node_utility.reshape((n_nodes, 1))
+        node_cost_inputs = node_cost.reshape((n_nodes, 1))
         direction_nums = direction_vector.shape[0]
         direction_vector_inputs = direction_vector.reshape(direction_nums, 3)
         direction_vector_inputs[:, 2] /= 640
-        node_inputs = np.concatenate((node_coords, node_utility_inputs, indicator, direction_vector_inputs), axis=1)
+        node_inputs = np.concatenate(
+            (node_coords, node_utility_inputs, indicator, direction_vector_inputs, node_cost_inputs), axis=1
+        )
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)  # (1, node_padding_size+1, 3)
 
         # calculate a mask for padded node
@@ -138,7 +144,9 @@ class TestWorker:
     def select_node(self, observations):
         node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask = observations
         with torch.no_grad():
-            logp_list = self.local_policy_net(node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask)
+            logp_list = self.local_policy_net(
+                node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask
+            )
 
         if self.greedy:
             action_index = torch.argmax(logp_list, dim=1).long()
@@ -160,11 +168,13 @@ class TestWorker:
         return bias_matrix
 
     def make_gif(self, path, n):
-        with imageio.get_writer('{}/{}_explored_rate_{:.4g}.gif'.format(path, n, self.env.explored_rate), mode='I', duration=0.5) as writer:
+        with imageio.get_writer(
+            "{}/{}_explored_rate_{:.4g}.gif".format(path, n, self.env.explored_rate), mode="I", duration=0.5
+        ) as writer:
             for frame in self.env.frame_files:
                 image = imageio.imread(frame)
                 writer.append_data(image)
-        print('gif complete\n')
+        print("gif complete\n")
 
         # Remove files
         for filename in self.env.frame_files[:-1]:

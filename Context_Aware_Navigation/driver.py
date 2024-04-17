@@ -1,15 +1,17 @@
-import torch
-import torch.optim as optim
-import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
-import ray
 import os
-import numpy as np
 import random
+import shutil
+
+import numpy as np
+import ray
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 
 from model import PolicyNet, QNet
-from runner import RLRunner
 from parameter import *
+from runner import RLRunner
 
 ray.init()
 print("Welcome to Reactive Autonomous Navigation!")
@@ -55,6 +57,9 @@ def writeToTensorBoard(writer, tensorboardData, curr_episode):
 
 
 def main():
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
+    shutil.copy("parameter.py", model_path)
     device = torch.device("cuda") if USE_GPU_GLOBAL else torch.device("cpu")
     local_device = torch.device("cuda") if USE_GPU else torch.device("cpu")
 

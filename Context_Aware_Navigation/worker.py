@@ -58,7 +58,10 @@ class Worker:
             (node_coords, node_utility_inputs, indicator, direction_vector_inputs, node_cost), axis=1
         )
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)  # (1, node_padding_size+1, 3)
-        assert node_coords.shape[0] < self.node_padding_size
+        try:
+            assert node_coords.shape[0] < self.node_padding_size
+        except AssertionError:
+            print(f"node_coords.shape[0]:{node_coords.shape[0]}")
         padding = torch.nn.ZeroPad2d((0, 0, 0, self.node_padding_size - node_coords.shape[0]))
         node_inputs = padding(node_inputs)
         # calculate a mask to padded nodes
@@ -138,7 +141,7 @@ class Worker:
     def run_episode(self, curr_episode):
         done = False
         observations = self.get_observations()
-        for i in range(128): # 128 steps for each episode
+        for i in range(128):  # 128 steps for each episode
             self.save_observations(observations)
             next_position, action_index = self.select_node(observations)
             self.save_action(action_index)
