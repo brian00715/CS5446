@@ -1,5 +1,6 @@
 import math
 import os
+import sys
 import time
 
 import ipdb
@@ -9,14 +10,14 @@ import skimage.io
 from scipy import *
 from skimage.measure import block_reduce
 
-from parameter import *
 from graph_generator import *
 from node import *
+from parameter import *
 from sensor import collision_check, sensor_work
 from util import generate_cost_map
 
 
-class Env:
+class DungeonEnv:
     """
 
     self.ground_truth: 2d array of bools (same dimention as map), indicating the the navigable area. True means navigable.
@@ -27,10 +28,12 @@ class Env:
 
     def __init__(self, map_index, k_size=20, plot=False, test=False):
         self.test = test
+        curr_path = os.path.dirname(os.path.abspath(__file__))
         if self.test:
-            self.map_dir = f"DungeonMaps/pp/test"
+            self.map_dir = curr_path + "/../DungeonMaps/pp/test"
+            # self.map_dir = curr_path + "/../DungeonMaps/custom"
         else:
-            self.map_dir = f"DungeonMaps/pp/train"
+            self.map_dir = curr_path + "/../DungeonMaps/pp/train"
         self.map_list = os.listdir(self.map_dir)
         self.map_list.sort(reverse=True)
         self.map_index = map_index % np.size(self.map_list)

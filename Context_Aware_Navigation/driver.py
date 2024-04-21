@@ -88,7 +88,8 @@ def main():
     entropy_target = 0.01 * (-np.log(1 / K_SIZE))
     curr_episode = 0
     target_q_update_counter = 1
-
+    
+    print(f"MAX_EPISODE: {MAX_EPISODE}")
     if LOAD_MODEL:
         print("Loading Model...")
         checkpoint = torch.load(model_path + "/checkpoint.pth")
@@ -158,7 +159,7 @@ def main():
 
     # collect data from worker and do training
     try:
-        while True:  # TODO: only terminate manually?
+        while curr_episode <= MAX_EPISODE:
             # wait for any job to be completed
             done_id, job_list = ray.wait(job_list)
             # get the results
@@ -168,9 +169,9 @@ def main():
             for job in done_jobs:
                 job_results, metrics, info = job
                 for i in range(len(experience_buffer)):
-                    # experience_buffer[i] += job_results[i] BUG: lead to memory leak
-                    experience_ = [e.detach().cpu() for e in job_results[i]]
-                    experience_buffer[i] += experience_
+                    experience_buffer[i] += job_results[i]  # BUG: lead to memory leak
+                    # experience_ = [e.detach().cpu() for e in job_results[i]]
+                    # experience_buffer[i] += experience_
                 for n in metric_name:
                     perf_metrics[n].append(metrics[n])
 

@@ -53,7 +53,6 @@ class Runner(object):
             "id": self.meta_agent_id,
             "episode_number": episode_number,
         }
-
         return job_results, metrics, info
 
 

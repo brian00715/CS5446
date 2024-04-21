@@ -19,7 +19,6 @@ class Graph_generator:
         self.map_x = map_size[1]
         self.map_y = map_size[0]
         self.uniform_points = self.generate_uniform_points()
-        print(f"uniform_points: {self.uniform_points.shape}")
         self.costmap = costmap
         self.sensor_range = sensor_range
         self.route_node = []

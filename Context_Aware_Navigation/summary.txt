@@ -1,0 +1,5 @@
+|#Total test: 200
+|#Test average curvature: 0.014523952512880255
+|#Curvature std: 0.007827991830640845
+|#Average length: 690.4420003480205
+|#Length std: 411.58206984419706

@@ -3,7 +3,7 @@ import os
 import imageio
 import numpy as np
 import torch
-from env import Env
+from envs.dungeon_env import DungeonEnv
 from parameter import *
 
 
@@ -17,7 +17,7 @@ class Worker:
         self.k_size = K_SIZE
         self.save_image = save_image
 
-        self.env = Env(map_index=self.global_step, k_size=self.k_size, plot=save_image)
+        self.env = DungeonEnv(map_index=self.global_step, k_size=self.k_size, plot=save_image)
         self.local_policy_net = policy_net
         self.local_q_net = q_net
 
@@ -115,28 +115,29 @@ class Worker:
 
     def save_observations(self, observations):
         node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask = observations
-        self.episode_buffer[0] += copy.deepcopy(node_inputs)
-        self.episode_buffer[1] += copy.deepcopy(edge_inputs)
-        self.episode_buffer[2] += copy.deepcopy(current_index)
-        self.episode_buffer[3] += copy.deepcopy(node_padding_mask)
-        self.episode_buffer[4] += copy.deepcopy(edge_padding_mask)
-        self.episode_buffer[5] += copy.deepcopy(edge_mask)
+        self.episode_buffer[0] += copy.deepcopy(node_inputs.detach().cpu())
+        self.episode_buffer[1] += copy.deepcopy(edge_inputs.detach().cpu())
+        self.episode_buffer[2] += copy.deepcopy(current_index.detach().cpu())
+        self.episode_buffer[3] += copy.deepcopy(node_padding_mask.bool().detach().cpu())
+        self.episode_buffer[4] += copy.deepcopy(edge_padding_mask.bool().detach().cpu())
+        self.episode_buffer[5] += copy.deepcopy(edge_mask.bool().detach().cpu())
 
     def save_action(self, action_index):
-        self.episode_buffer[6] += action_index.unsqueeze(0).unsqueeze(0)
+        self.episode_buffer[6] += action_index.unsqueeze(0).unsqueeze(0).detach().cpu()
 
     def save_reward_done(self, reward, done):
-        self.episode_buffer[7] += copy.deepcopy(torch.FloatTensor([[[reward]]]).to(self.device))
-        self.episode_buffer[8] += copy.deepcopy(torch.tensor([[[(int(done))]]]).to(self.device))
+        self.episode_buffer[7] += copy.deepcopy(torch.FloatTensor([[[reward]]]).to(self.device).detach().cpu())
+        self.episode_buffer[8] += copy.deepcopy(torch.tensor([[[(int(done))]]]).to(self.device).detach().cpu())
 
     def save_next_observations(self, observations):
         node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask = observations
-        self.episode_buffer[9] += copy.deepcopy(node_inputs)
-        self.episode_buffer[10] += copy.deepcopy(edge_inputs)
-        self.episode_buffer[11] += copy.deepcopy(current_index)
-        self.episode_buffer[12] += copy.deepcopy(node_padding_mask)
-        self.episode_buffer[13] += copy.deepcopy(edge_padding_mask)
-        self.episode_buffer[14] += copy.deepcopy(edge_mask)
+        self.episode_buffer[9] += copy.deepcopy(node_inputs.detach().cpu())
+        self.episode_buffer[10] += copy.deepcopy(edge_inputs.detach().cpu())
+        self.episode_buffer[11] += copy.deepcopy(current_index.detach().cpu())
+        self.episode_buffer[12] += copy.deepcopy(node_padding_mask.bool().detach().cpu())
+        self.episode_buffer[13] += copy.deepcopy(edge_padding_mask.bool().detach().cpu())
+        self.episode_buffer[14] += copy.deepcopy(edge_mask.bool().detach().cpu())
+
 
     def run_episode(self, curr_episode):
         done = False

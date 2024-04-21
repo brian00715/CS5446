@@ -4,11 +4,11 @@ import shutil
 import numpy as np
 import ray
 import torch
-
+import ipdb
 from model import PolicyNet
 from test_parameter import *
 from test_worker import TestWorker
-
+from util import calcu_ave_curvature
 
 def run_test():
     if not os.path.exists(trajectory_path):
@@ -30,7 +30,7 @@ def run_test():
     curr_test = 0
 
     dist_history = []
-
+    curv_history = []
     job_list = []
     for i, meta_agent in enumerate(meta_agents):
         job_list.append(meta_agent.job.remote(weights, curr_test))
@@ -42,15 +42,23 @@ def run_test():
             done_jobs = ray.get(done_id)
 
             for job in done_jobs:
-                metrics, info = job
+                metrics, traj, info = job
+                curv_history.append(calcu_ave_curvature(traj))
                 dist_history.append(metrics["travel_dist"])
             if curr_test < NUM_TEST:
                 job_list.append(meta_agents[info["id"]].job.remote(weights, curr_test))
                 curr_test += 1
-
         print("|#Total test:", NUM_TEST)
+        print("|#Test average curvature:", np.array(curv_history).mean())
+        print("|#Curvature std:", np.array(curv_history).std())
         print("|#Average length:", np.array(dist_history).mean())
         print("|#Length std:", np.array(dist_history).std())
+        with open('summary.txt', 'w') as file:
+            file.write(f"|#Total test: {NUM_TEST}\n")
+            file.write(f"|#Test average curvature: {np.array(curv_history).mean()}\n")
+            file.write(f"|#Curvature std: {np.array(curv_history).std()}\n")
+            file.write(f"|#Average length: {np.array(dist_history).mean()}\n")
+            file.write(f"|#Length std: {np.array(dist_history).std()}\n")
 
     except KeyboardInterrupt:
         print("CTRL_C pressed. Killing remote workers")
@@ -81,21 +89,22 @@ class Runner(object):
         worker.work(episode_number)
 
         perf_metrics = worker.perf_metrics
-        return perf_metrics
+        traj = worker.robot_trajs
+        return perf_metrics, traj
 
     def job(self, weights, episode_number):
         print("starting episode {} on metaAgent {}".format(episode_number, self.meta_agent_id))
         # set the local weights to the global weight values from the master network
         self.set_weights(weights)
 
-        metrics = self.do_job(episode_number)
+        metrics, traj = self.do_job(episode_number)
 
         info = {
             "id": self.meta_agent_id,
             "episode_number": episode_number,
         }
 
-        return metrics, info
+        return metrics, traj, info
 
 
 if __name__ == "__main__":

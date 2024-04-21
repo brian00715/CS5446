@@ -1,6 +1,9 @@
-import numpy as np
+import os
+import sys
+
 import cv2
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def get_img_bin_rgb(img, low_r, high_r, low_g, high_g, low_b, high_b):
@@ -37,10 +40,10 @@ def calculate_cost_map(map_data: cv2.Mat, obstacle_cost=100, inflation_radius=3,
     mask = ~mask
     map_data[mask] = (255, 255, 255)
     map_bin = cv2.cvtColor(map_data, cv2.COLOR_BGR2GRAY)
-    cv2.imwrite("tmp/1_bin.png", map_bin)
+    cv2.imwrite(sys.path[0] + "/tmp/test_bin.png", map_bin)
     distance_map = cv2.distanceTransform(map_bin, cv2.DIST_L2, 5)
     norm_distance_map = cv2.normalize(distance_map, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-    cv2.imwrite("tmp/1_dist.png", norm_distance_map)
+    cv2.imwrite(sys.path[0] + "/tmp/test_dist.png", norm_distance_map)
 
     # Create a cost map based on the distance transform
     cost_map = obstacle_cost * np.exp(-inflation_scale * distance_map / inflation_radius)
@@ -48,9 +51,30 @@ def calculate_cost_map(map_data: cv2.Mat, obstacle_cost=100, inflation_radius=3,
 
     return normalized_cost_map
 
+if 0:
+    map = cv2.imread("/home/simon/Research/CS5446/Context_Aware_Navigation/DungeonMaps/pp/test/1.png")
+    cv2.imwrite(sys.path[0] + "/tmp/test_map.png", map)
+    inflation_radius = 0.1
+    inflation_scale = 1
+    costmap = calculate_cost_map(map, inflation_radius=inflation_radius, inflation_scale=inflation_scale)
+    # cv2.imwrite(sys.path[0]+f"/tmp/test_costmap_{inflation_radius}_{inflation_scale}.png", costmap)
 
-map = cv2.imread("/home/simon/Research/CS5446/Context_Aware_Navigation/DungeonMaps/pp/test/1.png")
-inflation_radius = 5
-inflation_scale = 0.2
-costmap = calculate_cost_map(map, inflation_radius=inflation_radius, inflation_scale=inflation_scale)
-cv2.imwrite(f"tmp/1_costmap_{inflation_radius}_{inflation_scale}.png", costmap)
+    height, width = costmap.shape
+    rgb_costmap = np.zeros((height, width, 3), dtype=np.uint8)
+    for x in range(width):
+        for y in range(height):
+            if costmap[y, x] != 255:
+                gray_value = costmap[y, x]
+                red = gray_value
+                green = 0
+                blue =  255 - gray_value
+            else:
+                red = 255
+                green = 255
+                blue = 255
+            rgb_costmap[y, x] = [red, green, blue]
+    plt.imsave(sys.path[0] + f"/tmp/test_costmap_{inflation_radius}_{inflation_scale}.png", rgb_costmap)
+if 1:
+    path = os.path.dirname(os.path.abspath(__file__))
+    print(f"==>> path: {path}")
+    

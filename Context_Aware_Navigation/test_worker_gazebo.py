@@ -5,10 +5,9 @@ import copy
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from envs.dungeon_env import DungeonEnv
+from envs.gazebo_env import GazeboEnv
 from model import PolicyNet
 from test_parameter import *
-from util import calcu_ave_curvature
 
 
 class TestWorker:
@@ -20,11 +19,10 @@ class TestWorker:
         self.k_size = K_SIZE
         self.save_image = save_image
 
-        self.env = DungeonEnv(map_index=self.global_step, k_size=self.k_size, plot=save_image, test=True)
+        self.env = Env(map_index=self.global_step, k_size=self.k_size, plot=save_image, test=True)
         self.local_policy_net = policy_net
         self.travel_dist = 0
         self.robot_position = self.env.start_position
-        self.robot_trajs = [self.robot_position]
         self.perf_metrics = dict()
 
     def run_episode(self, curr_episode):
@@ -37,8 +35,6 @@ class TestWorker:
             reward, done, self.robot_position, self.travel_dist = self.env.step(
                 self.robot_position, next_position, self.travel_dist
             )
-            ave_curvature = calcu_ave_curvature(self.robot_trajs)
-            self.robot_trajs.append(self.robot_position)
 
             observations = self.get_observations()
 
@@ -48,21 +44,19 @@ class TestWorker:
                     os.makedirs(trajectory_path)
                 csv_filename = f"{trajectory_path}/ours_trajectory_result.csv"
                 new_file = False if os.path.exists(csv_filename) else True
-                field_names = ["dist", "area", "curvature"]
+                field_names = ["dist", "area"]
                 with open(csv_filename, "a") as csvfile:
                     writer = csv.writer(csvfile)
                     if new_file:
                         writer.writerow(field_names)
-                    csv_data = np.array(
-                        [self.travel_dist, np.sum(self.env.robot_belief == 255), ave_curvature]
-                    ).reshape(1, -1)
+                    csv_data = np.array([self.travel_dist, np.sum(self.env.robot_belief == 255)]).reshape(1, -1)
                     writer.writerows(csv_data)
 
             # save a frame
-            if self.save_image:
-                if not os.path.exists(gifs_path):
-                    os.makedirs(gifs_path)
-                self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
+            # if self.save_image:
+            #     if not os.path.exists(gifs_path):
+            #         os.makedirs(gifs_path)
+            #     self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
 
             if done:
                 break
